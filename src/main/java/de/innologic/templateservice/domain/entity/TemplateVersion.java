@@ -62,17 +62,19 @@ public class TemplateVersion extends AuditableEntity {
     @Column(name = "render_target", nullable = false, length = 16)
     private RenderTarget renderTarget;
 
-    // Wichtig: @Lob entfernen, sonst CLOB/TINYTEXT-Mapping möglich.
+    // Flyway: subject_tpl TEXT
     @JdbcTypeCode(SqlTypes.LONGVARCHAR)
-    @Column(name = "subject_tpl", columnDefinition = "TEXT")
+    @Column(name = "subject_tpl", columnDefinition = "text")
     private String subjectTpl;
 
+    // Flyway: body_tpl LONGTEXT NOT NULL
     @JdbcTypeCode(SqlTypes.LONGVARCHAR)
-    @Column(name = "body_tpl", nullable = false, columnDefinition = "LONGTEXT")
+    @Column(name = "body_tpl", nullable = false, columnDefinition = "longtext")
     private String bodyTpl;
 
+    // Flyway: placeholders JSON (bei MariaDB 10.4 effektiv LONGTEXT-Alias)
     @JdbcTypeCode(SqlTypes.LONGVARCHAR)
-    @Column(name = "placeholders", columnDefinition = "LONGTEXT")
+    @Column(name = "placeholders", columnDefinition = "json")
     private String placeholders;
 
     public UUID getVersionId() {

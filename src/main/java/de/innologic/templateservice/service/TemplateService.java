@@ -98,6 +98,7 @@ public class TemplateService {
         applyVersionRequest(version, request);
         version.setCreatedBy(request.updatedBy());
         version.setUpdatedBy(request.updatedBy());
+
         return toVersionResponse(templateVersionRepository.save(version));
     }
 
@@ -159,10 +160,10 @@ public class TemplateService {
         TemplateVersion version = Optional.ofNullable(family.getActiveApprovedVersion())
                 .flatMap(versionNo -> templateVersionRepository.findByTemplateIdAndVersionNo(family.getTemplateId(), versionNo))
                 .filter(found -> found.getStatus() == TemplateStatus.APPROVED)
-                .or(() -> templateVersionRepository.findFirstByTemplateIdAndStatusOrderByVersionNoDesc(
-                        family.getTemplateId(), TemplateStatus.APPROVED))
+                .or(() -> templateVersionRepository.findFirstByTemplateIdAndStatusOrderByVersionNoDesc(family.getTemplateId(), TemplateStatus.APPROVED))
                 .orElseThrow(() -> new UnprocessableTemplateException(
-                        "No APPROVED version available for template " + family.getTemplateId()));
+                        "No APPROVED version available for template " + family.getTemplateId()
+                ));
 
         return renderResponse(version, request.model());
     }
@@ -257,14 +258,15 @@ public class TemplateService {
             List<String> parsed = jsonMapper.readValue(placeholders, new TypeReference<List<String>>() {});
             return parsed == null
                     ? List.of()
-                    : parsed.stream().filter(value -> value != null && !value.isBlank()).toList();
+                    : parsed.stream().filter(v -> v != null && !v.isBlank()).toList();
         } catch (Exception ignored) {
             return List.of(placeholders.replace("[", "")
                             .replace("]", "")
                             .replace("\"", "")
-                            .split(",")).stream()
+                            .split(","))
+                    .stream()
                     .map(String::trim)
-                    .filter(value -> !value.isEmpty())
+                    .filter(v -> !v.isEmpty())
                     .toList();
         }
     }
@@ -332,3 +334,4 @@ public class TemplateService {
         );
     }
 }
+

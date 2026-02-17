@@ -2,9 +2,12 @@ package de.innologic.templateservice.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import de.innologic.templateservice.api.dto.RenderResponse;
+import de.innologic.templateservice.api.dto.PageResponse;
 import de.innologic.templateservice.api.dto.TemplateFamilyResponse;
 import de.innologic.templateservice.api.dto.TemplateVersionResponse;
 import de.innologic.templateservice.api.dto.ValidateTemplateResponse;
+import de.innologic.templateservice.api.dto.CatalogTemplateFamilyResponse;
+import de.innologic.templateservice.api.dto.CatalogTemplateVersionResponse;
 import de.innologic.templateservice.api.error.ConflictException;
 import de.innologic.templateservice.api.error.UnprocessableTemplateException;
 import de.innologic.templateservice.domain.enums.RenderTarget;
@@ -37,6 +40,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -91,6 +95,58 @@ class TemplateControllerMockMvcIT {
     }
 
     @Test
+    void listFamilies_returnsPagingMetadata() throws Exception {
+        UUID templateId = UUID.randomUUID();
+        TemplateFamilyResponse item = familyResponse(templateId, TemplateScope.TENANT, "tenantA", 1);
+        when(templateService.listFamilies(0, 2, "createdAt,DESC"))
+                .thenReturn(new PageResponse<>(List.of(item), 0, 2, 1));
+
+        mockMvc.perform(get("/api/v1/template/families?page=0&size=2&sort=createdAt,DESC")
+                        .with(jwtWithTenantAndRoles("tenantA", "tenant_admin")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(2))
+                .andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.items[0].templateId").value(templateId.toString()));
+    }
+
+    @Test
+    void catalogList_returnsMetadataAndPaging() throws Exception {
+        UUID templateId = UUID.randomUUID();
+        CatalogTemplateFamilyResponse item = new CatalogTemplateFamilyResponse(
+                templateId, "email.confirmation", "EMAIL", "de-DE", "TRANSACTIONAL", 3
+        );
+        when(templateService.catalogFamilies(TemplateScope.GLOBAL, "EMAIL", "de-DE", 0, 50, "templateKey,ASC"))
+                .thenReturn(new PageResponse<>(List.of(item), 0, 50, 1));
+
+        mockMvc.perform(get("/api/v1/template/catalog?scope=GLOBAL&channel=EMAIL&locale=de-DE&page=0&size=50&sort=templateKey,ASC")
+                        .with(jwtWithTenantAndRoles("tenantA", "tenant_admin")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(50))
+                .andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.items[0].templateId").value(templateId.toString()))
+                .andExpect(jsonPath("$.items[0].templateKey").value("email.confirmation"))
+                .andExpect(jsonPath("$.items[0].bodyTpl").doesNotExist());
+    }
+
+    @Test
+    void catalogApprovedVersions_returnsOnlyApprovedMetadata() throws Exception {
+        UUID templateId = UUID.randomUUID();
+        CatalogTemplateVersionResponse approved = new CatalogTemplateVersionResponse(
+                UUID.randomUUID(), templateId, 3, TemplateStatus.APPROVED, RenderTarget.HTML, Instant.parse("2026-02-17T09:00:00Z")
+        );
+        when(templateService.catalogApprovedVersions(templateId, 0, 50, "versionNo,DESC"))
+                .thenReturn(new PageResponse<>(List.of(approved), 0, 50, 1));
+
+        mockMvc.perform(get("/api/v1/template/catalog/{templateId}/approved-versions?page=0&size=50&sort=versionNo,DESC", templateId)
+                        .with(jwtWithTenantAndRoles("tenantA", "tenant_admin")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].status").value("APPROVED"))
+                .andExpect(jsonPath("$.items[0].bodyTpl").doesNotExist());
+    }
+
+    @Test
     void tenantAdmin_canCreateDraftVersionAndApprove_activeApprovedVersionSet() throws Exception {
         // Arrange
         UUID templateId = UUID.randomUUID();
@@ -136,7 +192,7 @@ class TemplateControllerMockMvcIT {
         // Arrange
         UUID templateId = UUID.randomUUID();
         RenderResponse response = new RenderResponse(
-            templateId, 2, TemplateStatus.APPROVED, RenderTarget.TEXT, "Hi Max", "Hello Max"
+            TemplateScope.TENANT, templateId, "de-DE", 2, TemplateStatus.APPROVED, RenderTarget.TEXT, "text/plain", "Hi Max", "Hello Max", List.of()
         );
         when(templateService.renderApproved(any())).thenReturn(response);
 
@@ -147,7 +203,8 @@ class TemplateControllerMockMvcIT {
                 .content("""
                     {
                       "templateId":"%s",
-                      "model":{"name":"Max"}
+                      "locale":"de-DE",
+                      "variables":{"name":"Max"}
                     }
                     """.formatted(templateId)))
             .andExpect(status().isOk())
@@ -160,12 +217,16 @@ class TemplateControllerMockMvcIT {
         // Arrange
         UUID templateId = UUID.randomUUID();
         RenderResponse response = new RenderResponse(
+            TemplateScope.TENANT,
             templateId,
+            "de-DE",
             1,
             TemplateStatus.APPROVED,
             RenderTarget.HTML,
+            "text/html",
             null,
-            "<p>&lt;script&gt;alert(1)&lt;/script&gt;</p>"
+            "<p>&lt;script&gt;alert(1)&lt;/script&gt;</p>",
+            List.of()
         );
         when(templateService.renderApproved(any())).thenReturn(response);
 
@@ -176,7 +237,8 @@ class TemplateControllerMockMvcIT {
                 .content("""
                     {
                       "templateId":"%s",
-                      "model":{"unsafe":"<script>alert(1)</script>"}
+                      "locale":"de-DE",
+                      "variables":{"unsafe":"<script>alert(1)</script>"}
                     }
                     """.formatted(templateId)))
             .andExpect(status().isOk())
@@ -189,7 +251,7 @@ class TemplateControllerMockMvcIT {
         // Arrange
         UUID templateId = UUID.randomUUID();
         RenderResponse response = new RenderResponse(
-            templateId, 3, TemplateStatus.DRAFT, RenderTarget.TEXT, null, "Preview for Draft"
+            TemplateScope.TENANT, templateId, "de-DE", 3, TemplateStatus.DRAFT, RenderTarget.TEXT, "text/plain", null, "Preview for Draft", List.of()
         );
         when(templateService.preview(any())).thenReturn(response);
 
@@ -200,8 +262,9 @@ class TemplateControllerMockMvcIT {
                 .content("""
                     {
                       "templateId":"%s",
+                      "locale":"de-DE",
                       "versionNo":3,
-                      "model":{"name":"Max"}
+                      "variables":{"name":"Max"}
                     }
                     """.formatted(templateId)))
             .andExpect(status().isOk())
@@ -300,8 +363,9 @@ class TemplateControllerMockMvcIT {
                 .content("""
                     {
                       "templateId":"%s",
+                      "locale":"de-DE",
                       "versionNo":1,
-                      "model":{"name":"Max"}
+                      "variables":{"name":"Max"}
                     }
                     """.formatted(UUID.randomUUID())))
             .andExpect(status().isUnprocessableEntity())
@@ -321,7 +385,8 @@ class TemplateControllerMockMvcIT {
                 .content("""
                     {
                       "templateId":"%s",
-                      "model":{"customerName":"Max"}
+                      "locale":"de-DE",
+                      "variables":{"customerName":"Max"}
                     }
                     """.formatted(UUID.randomUUID())))
             .andExpect(status().isUnprocessableEntity())
@@ -333,7 +398,7 @@ class TemplateControllerMockMvcIT {
     void tenantShadowingGlobalTemplate_returns409TemplateKeyReserved() throws Exception {
         // Arrange
         when(templateService.createFamily(any()))
-            .thenThrow(new ConflictException("TEMPLATE_KEY_RESERVED"));
+            .thenThrow(new ConflictException("TEMPLATE_SHADOWING_FORBIDDEN"));
 
         // Act + Assert
         mockMvc.perform(post("/api/v1/template/families")
@@ -350,6 +415,30 @@ class TemplateControllerMockMvcIT {
                     }
                     """))
             .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.errorCode").value("TEMPLATE_SHADOWING_FORBIDDEN"));
+    }
+
+    @Test
+    void tenantCreateReservedKey_returns422TemplateKeyReserved() throws Exception {
+        // Arrange
+        when(templateService.createFamily(any()))
+            .thenThrow(new UnprocessableTemplateException("TEMPLATE_KEY_RESERVED"));
+
+        // Act + Assert
+        mockMvc.perform(post("/api/v1/template/families")
+                .with(jwtWithTenantAndRoles("tenantA", "tenant_admin"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "scope":"TENANT",
+                      "ownerTenantId":"tenantA",
+                      "templateKey":"platform.welcome",
+                      "channel":"EMAIL",
+                      "locale":"de-DE",
+                      "category":"SYSTEM"
+                    }
+                    """))
+            .andExpect(status().isUnprocessableEntity())
             .andExpect(jsonPath("$.errorCode").value("TEMPLATE_KEY_RESERVED"));
     }
 
@@ -371,6 +460,29 @@ class TemplateControllerMockMvcIT {
                     """))
             .andExpect(status().isUnprocessableEntity())
             .andExpect(jsonPath("$.errorCode").value("TEMPLATE_SYNTAX_ERROR"));
+    }
+
+    @Test
+    void updateExistingVersionEndpoint_returns409VersionImmutable() throws Exception {
+        // Arrange
+        UUID templateId = UUID.randomUUID();
+        when(templateService.updateVersion(eq(templateId), eq(2), any()))
+            .thenThrow(new ConflictException("VERSION_IMMUTABLE"));
+
+        // Act + Assert
+        mockMvc.perform(put("/api/v1/template/families/{templateId}/versions/{versionNo}", templateId, 2)
+                .with(jwtWithTenantAndRoles("tenantA", "tenant_admin"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "status":"DRAFT",
+                      "renderTarget":"TEXT",
+                      "bodyTpl":"Hello {{name}}",
+                      "placeholders":"[\\"name\\"]"
+                    }
+                    """))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.errorCode").value("VERSION_IMMUTABLE"));
     }
 
     private static TemplateFamilyResponse familyResponse(

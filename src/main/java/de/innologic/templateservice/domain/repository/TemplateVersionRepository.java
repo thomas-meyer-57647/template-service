@@ -2,6 +2,8 @@ package de.innologic.templateservice.domain.repository;
 
 import de.innologic.templateservice.domain.entity.TemplateVersion;
 import de.innologic.templateservice.domain.enums.TemplateStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -12,9 +14,12 @@ public interface TemplateVersionRepository extends JpaRepository<TemplateVersion
 
     List<TemplateVersion> findByTemplateIdOrderByVersionNoDesc(UUID templateId);
 
+    Page<TemplateVersion> findByTemplateId(UUID templateId, Pageable pageable);
+
     Optional<TemplateVersion> findByTemplateIdAndVersionNo(UUID templateId, Integer versionNo);
 
     Optional<TemplateVersion> findFirstByTemplateIdAndStatusOrderByVersionNoDesc(UUID templateId, TemplateStatus status);
+    Page<TemplateVersion> findByTemplateIdAndStatus(UUID templateId, TemplateStatus status, Pageable pageable);
 
     Optional<TemplateVersion> findFirstByTemplateIdOrderByVersionNoDesc(UUID templateId);
 

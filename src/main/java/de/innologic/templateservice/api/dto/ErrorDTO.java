@@ -3,6 +3,7 @@ package de.innologic.templateservice.api.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.Instant;
+import java.util.Map;
 
 @Schema(
     name = "ErrorDTO",
@@ -13,11 +14,18 @@ public record ErrorDTO(
     Instant timestamp,
     @Schema(description = "HTTP-Statuscode.", example = "404")
     int status,
-    @Schema(description = "Kurzer Fehlercode bzw. -typ.", example = "Not Found")
-    String error,
+    @Schema(description = "Stabiler technischer Fehlercode.", example = "TEMPLATE_NOT_FOUND")
+    String errorCode,
     @Schema(description = "Fehlerbeschreibung für den Client.", example = "Template family not found: 5fbf2f42-7d2f-4fc0-9a76-d0946fc8a28f")
     String message,
+    @Schema(
+        description = "Optionale strukturierte Details.",
+        example = "{\"missingKeys\":[\"customerName\",\"invoiceNo\"]}"
+    )
+    Map<String, Object> details,
     @Schema(description = "API-Pfad der Anfrage.", example = "/api/v1/template/families/5fbf2f42-7d2f-4fc0-9a76-d0946fc8a28f")
-    String path
+    String path,
+    @Schema(description = "Korrelations-ID für Tracing und Support.", example = "b1f93a08-015f-4ba4-a10f-89b3f9f39e5e")
+    String correlationId
 ) {
 }

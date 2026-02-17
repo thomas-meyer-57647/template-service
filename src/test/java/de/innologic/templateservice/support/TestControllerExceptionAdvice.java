@@ -32,16 +32,20 @@ public class TestControllerExceptionAdvice {
 
     @ExceptionHandler(ConflictException.class)
     public ResponseEntity<TestErrorDto> handleConflict(ConflictException ex, HttpServletRequest request) {
-        return build(HttpStatus.CONFLICT, "TEMPLATE_KEY_RESERVED", ex.getMessage(), Collections.emptyMap(), request.getRequestURI());
+        return build(HttpStatus.CONFLICT, resolveConflictCode(ex.getMessage()), ex.getMessage(), Collections.emptyMap(), request.getRequestURI());
     }
 
     @ExceptionHandler(UnprocessableTemplateException.class)
     public ResponseEntity<TestErrorDto> handleUnprocessable(UnprocessableTemplateException ex, HttpServletRequest request) {
-        Map<String, Object> details = ex.getMessage().contains("missingKeys=")
-            ? Map.of("missingKeys", ex.getMessage().replace("missingKeys=", ""))
-            : Collections.emptyMap();
+        Map<String, Object> details = ex.getMissingKeys().isEmpty()
+            ? (ex.getMessage().contains("missingKeys=")
+                ? Map.of("missingKeys", ex.getMessage().replace("missingKeys=", ""))
+                : Collections.emptyMap())
+            : Map.of("missingKeys", ex.getMissingKeys());
         String errorCode = ex.getMessage().contains("TEMPLATE_SYNTAX_ERROR")
             ? "TEMPLATE_SYNTAX_ERROR"
+            : ex.getMessage().contains("TEMPLATE_KEY_RESERVED")
+                ? "TEMPLATE_KEY_RESERVED"
             : ex.getMessage().contains("VERSION_NOT_RENDERABLE")
                 ? "VERSION_NOT_RENDERABLE"
                 : ex.getMessage().contains("MISSING_KEYS")
@@ -60,5 +64,12 @@ public class TestControllerExceptionAdvice {
         return ResponseEntity.status(status).body(
             new TestErrorDto(Instant.now(), status.value(), errorCode, message, details, path)
         );
+    }
+
+    private String resolveConflictCode(String message) {
+        if (message != null && message.matches("^[A-Z0-9_]+$")) {
+            return message;
+        }
+        return "CONFLICT";
     }
 }

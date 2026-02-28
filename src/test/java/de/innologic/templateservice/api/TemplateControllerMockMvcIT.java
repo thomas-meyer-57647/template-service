@@ -155,7 +155,7 @@ class TemplateControllerMockMvcIT {
         TemplateFamilyResponse familyAfterApprove = familyResponse(templateId, TemplateScope.TENANT, "tenantA", 1);
 
         when(templateService.createVersion(eq(templateId), any())).thenReturn(draft);
-        when(templateService.approveVersion(eq(templateId), eq(1), any())).thenReturn(approved);
+        when(templateService.approveVersion(eq(templateId), eq(1))).thenReturn(approved);
         when(templateService.getFamily(eq(templateId))).thenReturn(familyAfterApprove);
 
         // Act + Assert

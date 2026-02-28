@@ -3,6 +3,7 @@ package de.innologic.templateservice.cache;
 import com.github.benmanes.caffeine.cache.Cache;
 import de.innologic.templateservice.api.dto.RenderRequest;
 import de.innologic.templateservice.api.dto.RenderResponse;
+import de.innologic.templateservice.api.error.NotFoundException;
 import de.innologic.templateservice.config.CacheConfig;
 import de.innologic.templateservice.domain.entity.TemplateFamily;
 import de.innologic.templateservice.domain.enums.MissingKeyPolicy;
@@ -12,6 +13,8 @@ import de.innologic.templateservice.domain.enums.TemplateStatus;
 import de.innologic.templateservice.service.TemplateService;
 import de.innologic.templateservice.support.AbstractMariaDbIntegrationTest;
 import de.innologic.templateservice.support.TemplateTestFixture;
+import de.innologic.templateservice.support.TestSecurityContext;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +24,7 @@ import org.springframework.cache.CacheManager;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
 class TemplateCachingIT extends AbstractMariaDbIntegrationTest {
@@ -38,6 +42,12 @@ class TemplateCachingIT extends AbstractMariaDbIntegrationTest {
     void resetCaches() {
         cacheManager.getCache(CacheConfig.TEMPLATE_RESOLVE_CACHE).clear();
         cacheManager.getCache(CacheConfig.TEMPLATE_APPROVED_VERSION_CACHE).clear();
+        TestSecurityContext.setJwt("tenant-a", "test-user", "template:read", "template:admin");
+    }
+
+    @AfterEach
+    void clearSecurityContext() {
+        TestSecurityContext.clear();
     }
 
     @Test
@@ -69,10 +79,32 @@ class TemplateCachingIT extends AbstractMariaDbIntegrationTest {
         assertThat(resolveNative.stats().hitCount()).isGreaterThan(0);
         assertThat(approvedNative.stats().hitCount()).isGreaterThan(0);
 
-        templateService.approveVersion(family.getTemplateId(), 2, "approver");
+        templateService.approveVersion(family.getTemplateId(), 2);
 
         RenderResponse afterApprove = templateService.renderApproved(request);
         assertThat(afterApprove.versionNo()).isEqualTo(2);
+    }
+
+    @Test
+    void renderApproved_wrongTenant_notFound() {
+        TemplateFamily family = fixture.createTenantFamily("tenant-a", "tenant-blocked");
+        fixture.createVersion(family.getTemplateId(), 1, TemplateStatus.APPROVED, RenderTarget.TEXT, "hello world");
+        TestSecurityContext.setJwt("tenant-b", "intruder", "template:read");
+
+        RenderRequest request = new RenderRequest(
+                null,
+                TemplateScope.TENANT,
+                "tenant-blocked",
+                "EMAIL",
+                "de-DE",
+                null,
+                MissingKeyPolicy.FAIL,
+                Map.of("name", "Max"),
+                null
+        );
+
+        assertThatThrownBy(() -> templateService.renderApproved(request))
+                .isInstanceOf(NotFoundException.class);
     }
 
     @SuppressWarnings("unchecked")
@@ -82,4 +114,3 @@ class TemplateCachingIT extends AbstractMariaDbIntegrationTest {
         return (Cache<Object, Object>) springCache.getNativeCache();
     }
 }
-

@@ -5,14 +5,14 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "${TEMPLATEPORT:-8080}:8080"
+      - "${TEMPLATEPORT:-8104}:8104"
     environment:
       TEMPLATE_DB_HOST: mariadb
       TEMPLATE_DB_PORT: 3306
       TEMPLATE_DB_NAME: template
       TEMPLATE_DB_USER: root
       TEMPLATE_DB_PASSWORD: ""
-      TEMPLATEPORT: 8080
+      TEMPLATEPORT: 8104
     depends_on:
       mariadb:
         condition: service_healthy

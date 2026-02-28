@@ -14,6 +14,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -76,6 +77,10 @@ public class TemplateVersion extends AuditableEntity {
     @JdbcTypeCode(SqlTypes.LONGVARCHAR)
     @Column(name = "placeholders", columnDefinition = "json")
     private String placeholders;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
 
     public UUID getVersionId() {
         return versionId;
@@ -147,5 +152,13 @@ public class TemplateVersion extends AuditableEntity {
 
     public void setPlaceholders(String placeholders) {
         this.placeholders = placeholders;
+    }
+
+    public Long getVersion() {
+        return version;
+    }
+
+    public void setVersion(Long version) {
+        this.version = version;
     }
 }

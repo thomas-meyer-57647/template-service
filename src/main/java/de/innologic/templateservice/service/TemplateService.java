@@ -33,6 +33,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import de.innologic.templateservice.security.TenantContext;
 import de.innologic.templateservice.security.TenantContextResolver;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -85,14 +86,16 @@ public class TemplateService {
     }
 
     public TemplateFamilyResponse createFamily(TemplateFamilyRequest request) {
+        TenantContext tenantContext = tenantContextResolver.resolveRequired();
+        String actor = tenantContext.actor();
         enforceFamilyGovernance(request, null);
         TemplateFamily family = new TemplateFamily();
         family.setTemplateId(UUID.randomUUID());
         applyFamilyRequest(family, request);
-        family.setCreatedBy(request.updatedBy());
-        family.setUpdatedBy(request.updatedBy());
+        family.setCreatedBy(actor);
+        family.setUpdatedBy(actor);
         TemplateFamily saved = templateFamilyRepository.save(family);
-        publishFamilyCreated(saved, request.updatedBy());
+        publishFamilyCreated(saved, actor);
         evictLookupCaches();
         return toFamilyResponse(saved);
     }
@@ -100,7 +103,14 @@ public class TemplateService {
     @Transactional(readOnly = true)
     public PageResponse<TemplateFamilyResponse> listFamilies(int page, int size, String sort) {
         Pageable pageable = PageRequest.of(page, size, parseSort(sort));
-        Page<TemplateFamily> families = templateFamilyRepository.findAll(pageable);
+        String tenantId = tenantContextResolver.resolveRequired().tenantId();
+        Page<TemplateFamily> families = templateFamilyRepository.findVisibleFamilies(
+                TemplateScope.GLOBAL,
+                GLOBAL_OWNER,
+                TemplateScope.TENANT,
+                tenantId,
+                pageable
+        );
         List<TemplateFamilyResponse> items = families.getContent().stream().map(this::toFamilyResponse).toList();
         return new PageResponse<>(items, families.getNumber(), families.getSize(), families.getTotalElements());
     }
@@ -153,12 +163,14 @@ public class TemplateService {
     }
 
     public TemplateFamilyResponse updateFamily(UUID templateId, TemplateFamilyRequest request) {
+        TenantContext tenantContext = tenantContextResolver.resolveRequired();
+        String actor = tenantContext.actor();
         enforceFamilyGovernance(request, templateId);
         TemplateFamily family = requireFamily(templateId);
         applyFamilyRequest(family, request);
-        family.setUpdatedBy(request.updatedBy());
+        family.setUpdatedBy(actor);
         TemplateFamily saved = templateFamilyRepository.save(family);
-        publishFamilyUpdated(saved, request.updatedBy());
+        publishFamilyUpdated(saved, actor);
         evictLookupCaches();
         return toFamilyResponse(saved);
     }
@@ -177,17 +189,19 @@ public class TemplateService {
                 .map(version -> version.getVersionNo() + 1)
                 .orElse(1);
 
+        String actor = tenantContextResolver.resolveRequired().actor();
+
         TemplateVersion version = new TemplateVersion();
         version.setVersionId(UUID.randomUUID());
         version.setTemplateId(family.getTemplateId());
         version.setVersionNo(nextVersionNo);
         applyVersionRequest(version, request);
         version.setStatus(TemplateStatus.DRAFT);
-        version.setCreatedBy(request.updatedBy());
-        version.setUpdatedBy(request.updatedBy());
+        version.setCreatedBy(actor);
+        version.setUpdatedBy(actor);
 
         TemplateVersion saved = templateVersionRepository.save(version);
-        publishVersionCreated(family, saved, request.updatedBy());
+        publishVersionCreated(family, saved, actor);
         evictLookupCaches();
         return toVersionResponse(saved);
     }
@@ -208,7 +222,7 @@ public class TemplateService {
 
     @Transactional(readOnly = true)
     public TemplateVersionResponse getVersion(UUID templateId, Integer versionNo) {
-        return toVersionResponse(requireVersion(templateId, versionNo));
+        return toVersionResponse(requireVersionVisible(templateId, versionNo));
     }
 
     public TemplateVersionResponse updateVersion(UUID templateId, Integer versionNo, TemplateVersionRequest request) {
@@ -222,34 +236,36 @@ public class TemplateService {
         evictLookupCaches();
     }
 
-    public TemplateVersionResponse approveVersion(UUID templateId, Integer versionNo, String updatedBy) {
+    public TemplateVersionResponse approveVersion(UUID templateId, Integer versionNo) {
         TemplateFamily family = requireFamily(templateId);
         TemplateVersion selected = requireVersion(templateId, versionNo);
         if (selected.getStatus() == TemplateStatus.ARCHIVED) {
             throw new ConflictException("VERSION_NOT_RENDERABLE");
         }
 
+        String actor = tenantContextResolver.resolveRequired().actor();
+
         List<TemplateVersion> versions = templateVersionRepository.findByTemplateIdOrderByVersionNoDesc(templateId);
         List<Integer> deprecatedVersionNos = new ArrayList<>();
         for (TemplateVersion version : versions) {
             if (version.getVersionNo().equals(versionNo)) {
                 version.setStatus(TemplateStatus.APPROVED);
-                version.setUpdatedBy(updatedBy);
+                version.setUpdatedBy(actor);
                 selected = version;
             } else if (version.getStatus() == TemplateStatus.APPROVED) {
                 version.setStatus(TemplateStatus.DEPRECATED);
-                version.setUpdatedBy(updatedBy);
+                version.setUpdatedBy(actor);
                 deprecatedVersionNos.add(version.getVersionNo());
             }
         }
         templateVersionRepository.saveAll(versions);
 
         family.setActiveApprovedVersion(versionNo);
-        family.setUpdatedBy(updatedBy);
+        family.setUpdatedBy(actor);
         templateFamilyRepository.save(family);
-        publishVersionApproved(family, selected, updatedBy);
+        publishVersionApproved(family, selected, actor);
         for (Integer deprecatedVersionNo : deprecatedVersionNos) {
-            publishVersionDeprecated(family, deprecatedVersionNo, updatedBy);
+            publishVersionDeprecated(family, deprecatedVersionNo, actor);
         }
         evictLookupCaches();
 
@@ -280,7 +296,13 @@ public class TemplateService {
         TemplateVersion version = Optional.ofNullable(request.versionNo())
                 .flatMap(versionNo -> templateVersionRepository.findByTemplateIdAndVersionNo(family.getTemplateId(), versionNo))
                 .or(() -> templateVersionRepository.findFirstByTemplateIdOrderByVersionNoDesc(family.getTemplateId()))
-                .orElseThrow(() -> new NotFoundException("VERSION_NOT_FOUND"));
+                .orElseThrow(() -> new NotFoundException(
+                        "VERSION_NOT_FOUND",
+                        "Template version not found for templateId=%s versionNo=%s".formatted(
+                                family.getTemplateId(),
+                                request.versionNo()
+                        )
+                ));
         if (version.getStatus() == TemplateStatus.ARCHIVED) {
             throw new UnprocessableTemplateException("VERSION_NOT_RENDERABLE");
         }
@@ -401,7 +423,12 @@ public class TemplateService {
             }
         }
 
-        throw new NotFoundException("TEMPLATE_NOT_FOUND");
+        throw new NotFoundException(
+                "TEMPLATE_NOT_FOUND",
+                "Template family not found for key=%s channel=%s locale=%s".formatted(
+                        request.templateKey(), request.channel(), request.locale()
+                )
+        );
     }
 
     private List<String> localeCandidates(String requestedLocale) {
@@ -467,7 +494,6 @@ public class TemplateService {
     }
 
     private void applyVersionRequest(TemplateVersion version, TemplateVersionRequest request) {
-        version.setStatus(request.status());
         version.setRenderTarget(request.renderTarget());
         version.setSubjectTpl(request.subjectTpl());
         version.setBodyTpl(request.bodyTpl());
@@ -615,15 +641,27 @@ public class TemplateService {
     }
 
     private TemplateFamily requireFamily(UUID templateId) {
-        return templateFamilyRepository.findById(templateId)
-                .orElseThrow(() -> new NotFoundException("Template family not found: " + templateId));
+        String tenantId = tenantContextResolver.resolveRequired().tenantId();
+        return templateFamilyRepository.findVisibleByTemplateId(
+                templateId,
+                TemplateScope.TENANT,
+                tenantId,
+                TemplateScope.GLOBAL,
+                GLOBAL_OWNER
+        ).orElseThrow(() -> new NotFoundException("TEMPLATE_NOT_FOUND", "Template family not found: " + templateId));
     }
 
     private TemplateVersion requireVersion(UUID templateId, Integer versionNo) {
         return templateVersionRepository.findByTemplateIdAndVersionNo(templateId, versionNo)
                 .orElseThrow(() -> new NotFoundException(
+                        "VERSION_NOT_FOUND",
                         "Template version not found for templateId=%s versionNo=%d".formatted(templateId, versionNo)
                 ));
+    }
+
+    private TemplateVersion requireVersionVisible(UUID templateId, Integer versionNo) {
+        requireFamily(templateId);
+        return requireVersion(templateId, versionNo);
     }
 
     private TemplateFamilyResponse toFamilyResponse(TemplateFamily family) {

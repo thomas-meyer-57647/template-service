@@ -37,7 +37,7 @@ public record TemplateFamilyRequest(
     String category,
 
     @Size(max = 100)
-    @Schema(description = "Optionaler Audit-User.", example = "system-admin")
+    @Schema(description = "Optionaler Audit-User (wird ignoriert; der JWT-Subject wird verwendet).", example = "system-admin")
     String updatedBy
 ) {
 }

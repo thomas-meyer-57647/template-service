@@ -1,18 +1,6 @@
-# Environment Configuration
+# Environment
 
-## Service-specific variables
-
-- `TEMPLATE_DB_HOST`
-- `TEMPLATE_DB_PORT`
-- `TEMPLATE_DB_NAME`
-- `TEMPLATE_DB_USER`
-- `TEMPLATE_DB_PASSWORD`
-- `TEMPLATEPORT`
-
-## IntelliJ Run Configuration
-
-Example `Environment variables`:
-
-`TEMPLATE_DB_HOST=localhost;TEMPLATE_DB_PORT=3306;TEMPLATE_DB_NAME=template;TEMPLATE_DB_USER=root;TEMPLATE_DB_PASSWORD=;TEMPLATEPORT=8080`
-
-`Include system environment variables` can remain enabled because these variables are service-specific.
+- TEMPLATEPORT defaults to 8104.
+- Application listens on ${TEMPLATEPORT} (and defaults to 8104) behind /api/v1.
+- Dockerfile exposes 8104; docker-compose maps host 8104 to container 8104.
+- Tests run via Testcontainers, so they ignore this port directly but still rely on server.port=8104 when the app boots locally.

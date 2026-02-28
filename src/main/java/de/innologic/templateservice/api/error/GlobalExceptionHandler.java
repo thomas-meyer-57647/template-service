@@ -22,7 +22,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<ErrorDTO> handleNotFound(NotFoundException ex, HttpServletRequest request) {
-        return build(HttpStatus.NOT_FOUND, "TEMPLATE_NOT_FOUND", ex.getMessage(), Map.of(), request);
+        return build(HttpStatus.NOT_FOUND, ex.errorCode(), ex.getMessage(), Map.of(), request);
     }
 
     @ExceptionHandler(ConflictException.class)
@@ -98,7 +98,9 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         String correlationId = resolveCorrelationId(request);
-        return ResponseEntity.status(status).body(
+        return ResponseEntity.status(status)
+                .header("X-Correlation-Id", correlationId)
+                .body(
             new ErrorDTO(
                     Instant.now(),
                     status.value(),

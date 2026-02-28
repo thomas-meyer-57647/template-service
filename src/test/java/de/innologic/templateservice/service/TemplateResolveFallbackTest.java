@@ -126,7 +126,10 @@ class TemplateResolveFallbackTest {
 
         assertThatThrownBy(() -> templateService.renderApproved(request("fr-CA")))
                 .isInstanceOf(NotFoundException.class)
-                .hasMessage("TEMPLATE_NOT_FOUND");
+                .satisfies(ex -> {
+                    assertThat(ex).hasMessageStartingWith("Template family not found");
+                    assertThat(((NotFoundException) ex).errorCode()).isEqualTo("TEMPLATE_NOT_FOUND");
+                });
     }
 
     @Test

@@ -6,6 +6,7 @@ import de.innologic.templateservice.api.dto.TemplateFamilyRequest;
 import de.innologic.templateservice.api.dto.PageResponse;
 import de.innologic.templateservice.api.dto.CatalogTemplateVersionResponse;
 import de.innologic.templateservice.api.error.ConflictException;
+import de.innologic.templateservice.api.error.NotFoundException;
 import de.innologic.templateservice.api.error.UnprocessableTemplateException;
 import de.innologic.templateservice.domain.entity.TemplateFamily;
 import de.innologic.templateservice.domain.entity.TemplateVersion;
@@ -22,12 +23,15 @@ import de.innologic.templateservice.events.TemplateVersionDeprecatedEvent;
 import de.innologic.templateservice.service.TemplateService;
 import de.innologic.templateservice.support.AbstractMariaDbIntegrationTest;
 import de.innologic.templateservice.support.TemplateTestFixture;
+import de.innologic.templateservice.support.TestSecurityContext;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.util.List;
@@ -65,6 +69,12 @@ class TemplatePersistenceMariaDbIT extends AbstractMariaDbIntegrationTest {
         versionRepository.deleteAll();
         familyRepository.deleteAll();
         reset(templateEventPublisher);
+        TestSecurityContext.setJwt("tenant-a", "test-user", "template:read", "template:admin");
+    }
+
+    @AfterEach
+    void clearSecurityContext() {
+        TestSecurityContext.clear();
     }
 
     @Test
@@ -115,7 +125,7 @@ class TemplatePersistenceMariaDbIT extends AbstractMariaDbIntegrationTest {
         fixture.createVersion(family.getTemplateId(), 2, TemplateStatus.DRAFT, RenderTarget.TEXT, "Draft 2 {{name}}");
 
         // Act
-        TemplateVersionResponse approved = templateService.approveVersion(family.getTemplateId(), 2, "approver");
+        TemplateVersionResponse approved = templateService.approveVersion(family.getTemplateId(), 2);
         TemplateFamily reloaded = familyRepository.findById(family.getTemplateId()).orElseThrow();
         TemplateVersion version1 = versionRepository.findByTemplateIdAndVersionNo(family.getTemplateId(), 1).orElseThrow();
         TemplateVersion version2 = versionRepository.findByTemplateIdAndVersionNo(family.getTemplateId(), 2).orElseThrow();
@@ -292,7 +302,7 @@ class TemplatePersistenceMariaDbIT extends AbstractMariaDbIntegrationTest {
         fixture.createVersion(family.getTemplateId(), 1, TemplateStatus.APPROVED, RenderTarget.TEXT, "v1");
         fixture.createVersion(family.getTemplateId(), 2, TemplateStatus.DRAFT, RenderTarget.TEXT, "v2");
 
-        templateService.approveVersion(family.getTemplateId(), 2, "approver-sub");
+        templateService.approveVersion(family.getTemplateId(), 2);
 
         ArgumentCaptor<TemplateDomainEvent> captor = ArgumentCaptor.forClass(TemplateDomainEvent.class);
         verify(templateEventPublisher, atLeastOnce()).publish(captor.capture());
@@ -337,5 +347,65 @@ class TemplatePersistenceMariaDbIT extends AbstractMariaDbIntegrationTest {
             "[\"name\"]"
         )).isInstanceOf(Exception.class);
         assertThat(versionRepository.findByTemplateIdOrderByVersionNoDesc(family.getTemplateId())).hasSize(1);
+    }
+
+    @Test
+    void duplicateFamilies_differentCategoryShouldFail() {
+        TemplateFamily first = fixture.createTenantFamily("tenantA", "category.conflict");
+        TemplateFamily conflicting = new TemplateFamily();
+        conflicting.setTemplateId(UUID.randomUUID());
+        conflicting.setScope(TemplateScope.TENANT);
+        conflicting.setOwnerTenantId("tenantA");
+        conflicting.setTemplateKey("category.conflict");
+        conflicting.setChannel("EMAIL");
+        conflicting.setLocale("de-DE");
+        conflicting.setCategory("SYSTEM");
+        conflicting.setCreatedBy("test");
+        conflicting.setUpdatedBy("test");
+
+        assertThatThrownBy(() -> familyRepository.save(conflicting))
+            .isInstanceOf(DataIntegrityViolationException.class);
+        assertThat(familyRepository.findAll()).hasSize(1);
+        assertThat(familyRepository.findAll().get(0).getTemplateId()).isEqualTo(first.getTemplateId());
+    }
+
+    @Test
+    void duplicateFamilies_differentTenantAllowed() {
+        TemplateFamily tenantA = fixture.createTenantFamily("tenantA", "tenant.allowed");
+
+        TemplateFamily tenantB = new TemplateFamily();
+        tenantB.setTemplateId(UUID.randomUUID());
+        tenantB.setScope(TemplateScope.TENANT);
+        tenantB.setOwnerTenantId("tenantB");
+        tenantB.setTemplateKey("tenant.allowed");
+        tenantB.setChannel("EMAIL");
+        tenantB.setLocale("de-DE");
+        tenantB.setCategory("BILLING");
+        tenantB.setCreatedBy("test");
+        tenantB.setUpdatedBy("test");
+
+        TemplateFamily saved = familyRepository.save(tenantB);
+        assertThat(saved.getOwnerTenantId()).isEqualTo("tenantB");
+        assertThat(familyRepository.findAll()).hasSize(2);
+    }
+
+    @Test
+    void wrongTenant_cannotAccessTenantFamily() {
+        TemplateFamily family = fixture.createTenantFamily("tenantA", "tenant-secure");
+        fixture.createVersion(family.getTemplateId(), 1, TemplateStatus.APPROVED, RenderTarget.TEXT, "secret");
+        TestSecurityContext.setJwt("tenant-b", "intruder", "template:read", "template:admin");
+
+        TemplateVersionRequest request = new TemplateVersionRequest(
+            null,
+            TemplateStatus.DRAFT,
+            RenderTarget.TEXT,
+            "attempt",
+            "attempt",
+            "[\"name\"]",
+            "intruder"
+        );
+
+        assertThatThrownBy(() -> templateService.createVersion(family.getTemplateId(), request))
+            .isInstanceOf(NotFoundException.class);
     }
 }

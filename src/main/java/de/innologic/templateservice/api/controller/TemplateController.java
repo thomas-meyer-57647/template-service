@@ -24,6 +24,7 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -52,6 +53,7 @@ import java.util.UUID;
     name = "Template API",
     description = "CRUD, Freigabe und Rendering für Template-Familien und Template-Versionen."
 )
+@SecurityRequirement(name = "bearerAuth")
 public class TemplateController {
 
     private static final String GLOBAL_OWNER = "__GLOBAL__";
@@ -76,6 +78,14 @@ public class TemplateController {
         @ApiResponse(responseCode = "200", description = "Render erfolgreich",
             content = @Content(schema = @Schema(implementation = RenderResponse.class))),
         @ApiResponse(responseCode = "400", description = "Ungültiger Request",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "401", description = "Nicht authentifiziert",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "403", description = "Nicht autorisiert",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "401", description = "Nicht authentifiziert",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "403", description = "Nicht autorisiert",
             content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
         @ApiResponse(responseCode = "404", description = "Template-Familie nicht gefunden",
             content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
@@ -160,6 +170,12 @@ public class TemplateController {
         @ApiResponse(responseCode = "200", description = "Validierung durchgeführt",
             content = @Content(schema = @Schema(implementation = ValidateTemplateResponse.class))),
         @ApiResponse(responseCode = "400", description = "Ungültiger Request",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "401", description = "Nicht authentifiziert",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "403", description = "Nicht autorisiert",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "404", description = "Nicht gefunden",
             content = @Content(schema = @Schema(implementation = ErrorDTO.class)))
     })
     public ValidateTemplateResponse validate(
@@ -194,6 +210,12 @@ public class TemplateController {
         @ApiResponse(responseCode = "200", description = "Erfolgreich",
             content = @Content(schema = @Schema(implementation = PageResponse.class))),
         @ApiResponse(responseCode = "400", description = "Ungültiger Request",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "401", description = "Nicht authentifiziert",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "403", description = "Nicht autorisiert",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "404", description = "Nicht gefunden",
             content = @Content(schema = @Schema(implementation = ErrorDTO.class)))
     })
     public PageResponse<CatalogTemplateFamilyResponse> catalog(
@@ -221,6 +243,12 @@ public class TemplateController {
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Erfolgreich",
             content = @Content(schema = @Schema(implementation = PageResponse.class))),
+        @ApiResponse(responseCode = "400", description = "Ungültiger Request",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "401", description = "Nicht authentifiziert",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "403", description = "Nicht autorisiert",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
         @ApiResponse(responseCode = "404", description = "Template nicht gefunden",
             content = @Content(schema = @Schema(implementation = ErrorDTO.class)))
     })
@@ -245,6 +273,12 @@ public class TemplateController {
         @ApiResponse(responseCode = "201", description = "Erfolgreich angelegt",
             content = @Content(schema = @Schema(implementation = TemplateFamilyResponse.class))),
         @ApiResponse(responseCode = "400", description = "Ungültiger Request",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "401", description = "Nicht authentifiziert",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "403", description = "Nicht autorisiert",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "404", description = "Nicht gefunden",
             content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
         @ApiResponse(responseCode = "409", description = "Unique-Constraint verletzt",
             content = @Content(schema = @Schema(implementation = ErrorDTO.class)))
@@ -274,8 +308,18 @@ public class TemplateController {
 
     @GetMapping("/families")
     @Operation(summary = "Template-Familien auflisten", description = "Liefert Templates paginiert und sortiert.")
-    @ApiResponse(responseCode = "200", description = "Erfolgreich",
-        content = @Content(schema = @Schema(implementation = PageResponse.class)))
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Erfolgreich",
+            content = @Content(schema = @Schema(implementation = PageResponse.class))),
+        @ApiResponse(responseCode = "400", description = "Ungültiger Request",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "401", description = "Nicht authentifiziert",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "403", description = "Nicht autorisiert",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "404", description = "Nicht gefunden",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class)))
+    })
     public PageResponse<TemplateFamilyResponse> listFamilies(
             @Parameter(description = "Seite (0-basiert).", example = "0")
             @RequestParam(defaultValue = "0") @Min(0) int page,
@@ -292,6 +336,12 @@ public class TemplateController {
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Erfolgreich",
             content = @Content(schema = @Schema(implementation = TemplateFamilyResponse.class))),
+        @ApiResponse(responseCode = "400", description = "Ungültiger Request",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "401", description = "Nicht authentifiziert",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "403", description = "Nicht autorisiert",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
         @ApiResponse(responseCode = "404", description = "Nicht gefunden",
             content = @Content(schema = @Schema(implementation = ErrorDTO.class)))
     })
@@ -309,6 +359,10 @@ public class TemplateController {
         @ApiResponse(responseCode = "200", description = "Erfolgreich aktualisiert",
             content = @Content(schema = @Schema(implementation = TemplateFamilyResponse.class))),
         @ApiResponse(responseCode = "400", description = "Ungültiger Request",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "401", description = "Nicht authentifiziert",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "403", description = "Nicht autorisiert",
             content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
         @ApiResponse(responseCode = "404", description = "Nicht gefunden",
             content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
@@ -330,6 +384,12 @@ public class TemplateController {
     @Operation(summary = "Template-Familie löschen", description = "Löscht eine Template-Familie inkl. aller Versionen.")
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "Erfolgreich gelöscht"),
+        @ApiResponse(responseCode = "400", description = "Ungültiger Request",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "401", description = "Nicht authentifiziert",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "403", description = "Nicht autorisiert",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
         @ApiResponse(responseCode = "404", description = "Nicht gefunden",
             content = @Content(schema = @Schema(implementation = ErrorDTO.class)))
     })
@@ -349,6 +409,10 @@ public class TemplateController {
             content = @Content(schema = @Schema(implementation = TemplateVersionResponse.class))),
         @ApiResponse(responseCode = "400", description = "Ungültiger Request",
             content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "401", description = "Nicht authentifiziert",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "403", description = "Nicht autorisiert",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
         @ApiResponse(responseCode = "404", description = "Template-Familie nicht gefunden",
             content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
         @ApiResponse(responseCode = "409", description = "Version bereits vorhanden",
@@ -367,6 +431,12 @@ public class TemplateController {
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Erfolgreich",
             content = @Content(schema = @Schema(implementation = PageResponse.class))),
+        @ApiResponse(responseCode = "400", description = "Ungültiger Request",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "401", description = "Nicht authentifiziert",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "403", description = "Nicht autorisiert",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
         @ApiResponse(responseCode = "404", description = "Template-Familie nicht gefunden",
             content = @Content(schema = @Schema(implementation = ErrorDTO.class)))
     })
@@ -388,6 +458,12 @@ public class TemplateController {
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Erfolgreich",
             content = @Content(schema = @Schema(implementation = TemplateVersionResponse.class))),
+        @ApiResponse(responseCode = "400", description = "Ungültiger Request",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "401", description = "Nicht authentifiziert",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "403", description = "Nicht autorisiert",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
         @ApiResponse(responseCode = "404", description = "Nicht gefunden",
             content = @Content(schema = @Schema(implementation = ErrorDTO.class)))
     })
@@ -413,6 +489,10 @@ public class TemplateController {
             content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
         @ApiResponse(responseCode = "400", description = "Ungültiger Request",
             content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "401", description = "Nicht authentifiziert",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "403", description = "Nicht autorisiert",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
         @ApiResponse(responseCode = "404", description = "Nicht gefunden",
             content = @Content(schema = @Schema(implementation = ErrorDTO.class)))
     })
@@ -432,6 +512,12 @@ public class TemplateController {
     @Operation(summary = "Version löschen", description = "Löscht eine konkrete Template-Version.")
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "Erfolgreich gelöscht"),
+        @ApiResponse(responseCode = "400", description = "Ungültiger Request",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "401", description = "Nicht authentifiziert",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "403", description = "Nicht autorisiert",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
         @ApiResponse(responseCode = "404", description = "Nicht gefunden",
             content = @Content(schema = @Schema(implementation = ErrorDTO.class)))
     })
@@ -453,6 +539,12 @@ public class TemplateController {
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Version freigegeben",
             content = @Content(schema = @Schema(implementation = TemplateVersionResponse.class))),
+        @ApiResponse(responseCode = "400", description = "Ungültiger Request",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "401", description = "Nicht authentifiziert",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
+        @ApiResponse(responseCode = "403", description = "Nicht autorisiert",
+            content = @Content(schema = @Schema(implementation = ErrorDTO.class))),
         @ApiResponse(responseCode = "404", description = "Template-Familie oder Version nicht gefunden",
             content = @Content(schema = @Schema(implementation = ErrorDTO.class)))
     })
@@ -467,8 +559,7 @@ public class TemplateController {
         )
         @RequestBody(required = false) ApproveVersionRequest request
     ) {
-        String updatedBy = request == null ? null : request.updatedBy();
-        return templateService.approveVersion(templateId, versionNo, updatedBy);
+        return templateService.approveVersion(templateId, versionNo);
     }
 
     private TemplateFamilyRequest normalizeFamilyRequest(TemplateFamilyRequest request, TenantContext tenantContext) {

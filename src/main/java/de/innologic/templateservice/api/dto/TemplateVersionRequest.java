@@ -12,8 +12,7 @@ public record TemplateVersionRequest(
     @Schema(description = "Versionsnummer; bei Create optional, wird sonst automatisch vergeben.", example = "2")
     Integer versionNo,
 
-    @NotNull
-    @Schema(description = "Status der Version.", example = "DRAFT")
+    @Schema(description = "Status der Version (serverseitig immer DRAFT).", example = "DRAFT")
     TemplateStatus status,
 
     @NotNull
@@ -32,7 +31,7 @@ public record TemplateVersionRequest(
     String placeholders,
 
     @Size(max = 100)
-    @Schema(description = "Optionaler Audit-User.", example = "editor-user")
+    @Schema(description = "Optionaler Audit-User (wird ignoriert; der JWT-Subject wird verwendet).", example = "editor-user")
     String updatedBy
 ) {
 }
